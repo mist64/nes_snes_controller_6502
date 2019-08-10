@@ -85,6 +85,9 @@ demo:
 	jsr $ab1e
 	lda #'1'
 	jsr $ffd2
+	lda #<tx_status
+	ldy #>tx_status
+	jsr $ab1e
 	lda #<tx_buttons
 	ldy #>tx_buttons
 	jsr $ab1e
@@ -93,11 +96,15 @@ demo:
 	jsr $ab1e
 	lda #'2'
 	jsr $ffd2
+	lda #<tx_status
+	ldy #>tx_status
+	jsr $ab1e
 	lda #<tx_buttons
 	ldy #>tx_buttons
 	jsr $ab1e
 
 loop:
+	; wait for vblank
 	lda $d012
 	bne loop
 	lda $d011
@@ -105,12 +112,18 @@ loop:
 
 ; clear
 	ldx #39
-clear:	lda $0400 + 2 * 40,x
+clear:	lda $0400 + 0 * 40,x
+	and #$7f
+	sta $0400 + 0 * 40,x
+	lda $0400 + 2 * 40,x
 	and #$7f
 	sta $0400 + 2 * 40,x
 	lda $0400 + 3 * 40,x
 	and #$7f
 	sta $0400 + 3 * 40,x
+	lda $0400 + 6 * 40,x
+	and #$7f
+	sta $0400 + 6 * 40,x
 	lda $0400 + 8 * 40,x
 	and #$7f
 	sta $0400 + 8 * 40,x
@@ -122,9 +135,9 @@ clear:	lda $0400 + 2 * 40,x
 
 	jsr get_joystick
 
-	lda #<($0400 + 2 * 40)
+	lda #<($0400)
 	sta 2
-	lda #>($0400 + 2 * 40)
+	lda #>($0400)
 	sta 3
 	jsr display_controller
 
@@ -135,21 +148,42 @@ clear:	lda $0400 + 2 * 40,x
 	lda joy2 + 2
 	sta joy1 + 2
 
-	lda #<($0400 + 8 * 40)
+	lda #<($0400 + 6 * 40)
 	sta 2
-	lda #>($0400 + 8 * 40)
+	lda #>($0400 + 6 * 40)
 	sta 3
 	jsr display_controller
 	jmp loop
 
 display_controller:
+; detect presence
+	lda joy1 + 2
+	bne notpres
+	lda joy1 + 1
+	lsr
+	bcc isnes
+	ldy #14 + 10
+	!by $2c
+isnes:
+	ldy #14 + 5
+	!by $2c
+notpres:
+	ldy #14 + 0
+	ldx #4
+detect:	lda (2),y
+	ora #$80
+	sta (2),y
+	iny
+	dex
+	bne detect
+
 ; detect type
-	ldy #13       ; default: NES, print into first line
+	ldy #2 * 40 + 13       ; default: NES, print into first line
 	lda joy1 + 1 ; type
 	lsr
 	bcc pr3      ; is NES
 ; SNES
-	ldy #41      ; SNES, print into second line
+	ldy #2 * 40 + 40 + 1   ; SNES, print into second line
 	lda joy1 + 1
 	ldx #4
 pr4:	asl
@@ -169,7 +203,7 @@ pr5:	iny
 	iny
 	dex
 	bne pr4
-	ldy #40+13
+	ldy #2 * 40 + 40 + 13
 
 ; NES
 pr3:	lda joy1
@@ -216,6 +250,9 @@ tx_clr:
 	!by $93, 0
 tx_controller:
 	!tx "controller "
+	!by 0
+tx_status:
+	!tx ": none nes  snes"
 	!by 0
 tx_buttons:
 	!by 13, 13
