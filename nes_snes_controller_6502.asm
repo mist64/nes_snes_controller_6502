@@ -1,23 +1,26 @@
 !to "controller.prg",cbm
-
 *=$c000
 	jmp demo
 
+;----------------------------------------------------------------------
+; NES & SNES Controller Driver for 6502
 ;----------------------------------------------------------------------
 
 ; C64 CIA#2 PB (user port)
 nes_data = $dd01
 nes_ddr  = $dd03
-
-bit_latch = $08 ; PB3 (user port pin F)
-bit_data1 = $10 ; PB4 (user port pin H)
-bit_clk   = $20 ; PB5 (user port pin J)
-bit_data2 = $40 ; PB6 (user port pin K)
+;
+bit_latch = $08 ; PB3 (user port pin F): LATCH (both controllers)
+bit_data1 = $10 ; PB4 (user port pin H): DATA  (controller #1)
+bit_clk   = $20 ; PB5 (user port pin J): CLK   (both controllers)
+bit_data2 = $40 ; PB6 (user port pin K): DATA  (controller #2)
 
 ; zero page
-joy1 = $e0 ; 3 bytes
-joy2 = $f0 ; 3 bytes
+controller1 = $e0 ; 3 bytes
+controller2 = $f0 ; 3 bytes
 
+;----------------------------------------------------------------------
+; query_controllers:
 ;
 ; byte 0:      | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
 ;         NES  | A | B |SEL|STA|UP |DN |LT |RT |
@@ -32,10 +35,8 @@ joy2 = $f0 ; 3 bytes
 ;
 ; * Presence can be detected by checking byte 2.
 ; * NES vs. SNES can be detected by checking bits 0-3 in byte 1.
-; * Note that bits 6 and 7 in byte 0 are different between NES and SNES.
-
-
-get_joystick:
+; * Note that bits 6 and 7 in byte 0 map to different buttons on NES and SNES.
+query_controllers:
 	lda #$ff-bit_data1-bit_data2
 	sta nes_ddr
 	lda #$00
@@ -47,16 +48,16 @@ get_joystick:
 	lda #0
 	sta nes_data
 
-	; read 2x 8 bits
+	; read 3x 8 bits
 	ldx #0
 l2:	ldy #8
 l1:	lda nes_data
 ;.assert bit_data2 > bit_data1, error, "bit_data2 must be greater than bit_data1, otherwise swap 1 vs. 2 here"
 	cmp #bit_data2
-	rol joy2,x
+	rol controller2,x
 	and #bit_data1
 	cmp #bit_data1
-	rol joy1,x
+	rol controller1,x
 	lda #bit_clk
 	sta nes_data
 	lda #0
@@ -66,7 +67,6 @@ l1:	lda nes_data
 	inx
 	cpx #3
 	bne l2
-
 	rts
 
 
@@ -133,7 +133,7 @@ clear:	lda $0400 + 0 * 40,x
 	dex
 	bpl clear
 
-	jsr get_joystick
+	jsr query_controllers
 
 	lda #<($0400)
 	sta 2
@@ -141,12 +141,12 @@ clear:	lda $0400 + 0 * 40,x
 	sta 3
 	jsr display_controller
 
-	lda joy2
-	sta joy1
-	lda joy2 + 1
-	sta joy1 + 1
-	lda joy2 + 2
-	sta joy1 + 2
+	lda controller2
+	sta controller1
+	lda controller2 + 1
+	sta controller1 + 1
+	lda controller2 + 2
+	sta controller1 + 2
 
 	lda #<($0400 + 6 * 40)
 	sta 2
@@ -157,9 +157,9 @@ clear:	lda $0400 + 0 * 40,x
 
 display_controller:
 ; detect presence
-	lda joy1 + 2
+	lda controller1 + 2
 	bne notpres
-	lda joy1 + 1
+	lda controller1 + 1
 	lsr
 	bcc isnes
 	ldy #14 + 10
@@ -179,12 +179,12 @@ detect:	lda (2),y
 
 ; detect type
 	ldy #2 * 40 + 13       ; default: NES, print into first line
-	lda joy1 + 1 ; type
+	lda controller1 + 1 ; type
 	lsr
 	bcc pr3      ; is NES
 ; SNES
 	ldy #2 * 40 + 40 + 1   ; SNES, print into second line
-	lda joy1 + 1
+	lda controller1 + 1
 	ldx #4
 pr4:	asl
 	bcs pr5
@@ -206,7 +206,7 @@ pr5:	iny
 	ldy #2 * 40 + 40 + 13
 
 ; NES
-pr3:	lda joy1
+pr3:	lda controller1
 	ldx #8
 pr1:	asl
 	bcs pr2
@@ -229,18 +229,18 @@ pr2:	iny
 
 
 
-	lda joy1 + 0
+	lda controller1 + 0
 	sta $0400
-	lda joy1 + 1
+	lda controller1 + 1
 	sta $0401
-	lda joy1 + 2
+	lda controller1 + 2
 	sta $0402
 
-	lda joy2
+	lda controller2
 	sta $0403
-	lda joy2 + 1
+	lda controller2 + 1
 	sta $0404
-	lda joy2 + 2
+	lda controller2 + 2
 	sta $0405
 
 	jmp loop
